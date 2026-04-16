@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getRouteById /*, handleApiError */ } from "../stravaClient.js"; // Removed handleApiError import
+import { getRouteById, getValidToken /*, handleApiError */ } from "../stravaClient.js"; // Removed handleApiError import
 import { formatRouteSummary } from "../formatters.js"; // Import shared formatter
 
 // Zod schema for input validation
@@ -18,12 +18,12 @@ export const getRouteTool = {
     inputSchema: GetRouteInputSchema,
     execute: async (input: GetRouteInput) => {
         const { routeId } = input;
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

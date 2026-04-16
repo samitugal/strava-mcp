@@ -3,7 +3,8 @@ import { z } from "zod";
 import {
     getAuthenticatedAthlete,
     exploreSegments as fetchExploreSegments, // Renamed import
-    StravaExplorerResponse
+    StravaExplorerResponse,
+    getValidToken
 } from "../stravaClient.js";
 
 const ExploreSegmentsInputSchema = z.object({
@@ -24,16 +25,16 @@ type ExploreSegmentsInput = z.infer<typeof ExploreSegmentsInputSchema>;
 // Export the tool definition directly
 export const exploreSegments = {
     name: "explore-segments",
-    description: "Searches for popular segments within a given geographical area.",
+    description: "Returns popular segments within a bounding box (south_west_lat,south_west_lng,north_east_lat,north_east_lng), optionally filtered by activity type (running/riding) and climb category.",
     inputSchema: ExploreSegmentsInputSchema,
     execute: async ({ bounds, activityType, minCat, maxCat }: ExploreSegmentsInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token || token === 'YOUR_STRAVA_ACCESS_TOKEN_HERE') {
-            console.error("Missing or placeholder STRAVA_ACCESS_TOKEN in .env");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "❌ Configuration Error: STRAVA_ACCESS_TOKEN is missing or not set in the .env file." }],
-                isError: true,
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
+                isError: true
             };
         }
         if ((minCat !== undefined || maxCat !== undefined) && activityType !== 'riding') {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { exportRouteTcx as fetchTcxData } from "../stravaClient.js";
+import { exportRouteTcx as fetchTcxData, getValidToken } from "../stravaClient.js";
 
 // Define the input schema for the tool
 const ExportRouteTcxInputSchema = z.object({
@@ -17,11 +17,12 @@ export const exportRouteTcx = {
     description: "Exports a specific Strava route in TCX format and saves it to a pre-configured local directory.",
     inputSchema: ExportRouteTcxInputSchema,
     execute: async ({ routeId }: ExportRouteTcxInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-        if (!token) {
-            // Strict return structure
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "❌ Error: Missing STRAVA_ACCESS_TOKEN in .env file." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getRecentActivities as fetchActivities, getAuthenticatedAthlete } from "../stravaClient.js";
+import { getRecentActivities as fetchActivities, getAuthenticatedAthlete, getValidToken } from "../stravaClient.js";
 // Reverted SDK type imports
 
 const GetRecentActivitiesInputSchema = z.object({
@@ -15,19 +15,14 @@ export const getRecentActivities = {
     inputSchema: GetRecentActivitiesInputSchema,
     // Ensure the return type matches the expected structure, relying on inference
     execute: async ({ perPage }: GetRecentActivitiesInput) => {
-      const token = process.env.STRAVA_ACCESS_TOKEN;
-
-      // --- DEBUGGING: Print the token being used --- 
-      console.error(`[DEBUG] Using STRAVA_ACCESS_TOKEN: ${token?.substring(0, 5)}...${token?.slice(-5)}`);
-      // ---------------------------------------------
-
-      if (!token || token === 'YOUR_STRAVA_ACCESS_TOKEN_HERE') {
-        console.error("Missing or placeholder STRAVA_ACCESS_TOKEN in .env");
-        // Use literal type for content item
-        return {
-          content: [{ type: "text" as const, text: "❌ Configuration Error: STRAVA_ACCESS_TOKEN is missing or not set in the .env file." }],
-          isError: true,
-        };
+      let token: string;
+      try {
+          token = await getValidToken();
+      } catch (error) {
+          return {
+              content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
+              isError: true
+          };
       }
 
       try {

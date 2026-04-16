@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { stravaApi } from '../stravaClient.js';
+import { stravaApi, getValidToken } from '../stravaClient.js';
 
 // Define stream types available in Strava API
 const STREAM_TYPES = [
@@ -12,7 +12,7 @@ const RESOLUTION_TYPES = ['low', 'medium', 'high'] as const;
 
 // Input schema using Zod
 export const inputSchema = z.object({
-    id: z.number().or(z.string()).describe(
+    activityId: z.coerce.number().int().positive().describe(
         'The Strava activity identifier to fetch streams for. This can be obtained from activity URLs or the get-activities tool.'
     ),
     types: z.array(z.enum(STREAM_TYPES))
@@ -336,51 +336,20 @@ export function calculateOptimalChunkSize(
 // Tool definition
 export const getActivityStreamsTool = {
     name: 'get-activity-streams',
-    description: 
-        'Retrieves detailed time-series data streams from a Strava activity. Perfect for analyzing workout metrics, ' +
-        'visualizing routes, or performing detailed activity analysis.\n\n' +
-        
-        'Key Features:\n' +
-        '1. Multiple Data Types: Access various metrics like heart rate, power, speed, GPS coordinates, etc.\n' +
-        '2. Flexible Resolution: Choose data density from low (~100 points) to high (~10000 points)\n' +
-        '3. Smart Pagination: Get data in manageable chunks optimized for LLM context limits\n' +
-        '4. Rich Statistics: Includes min/max/avg for numeric streams\n' +
-        '5. Dual Format Support: Compact (LLM-optimized) or verbose (human-readable)\n' +
-        '6. Intelligent Downsampling: Automatically reduce large datasets while preserving key features\n\n' +
-        
-        'Format Options:\n' +
-        '- compact (default): Raw arrays, minified JSON, ~70-80% smaller payloads, ideal for LLM processing\n' +
-        '- verbose: Human-readable objects with formatted values, backward compatible with legacy format\n\n' +
-        
-        'Common Use Cases:\n' +
-        '- Analyzing workout intensity through heart rate zones\n' +
-        '- Calculating power metrics for cycling activities\n' +
-        '- Visualizing route data using GPS coordinates\n' +
-        '- Analyzing pace and elevation changes\n' +
-        '- Detailed segment analysis\n\n' +
-        
-        'Output Format:\n' +
-        '1. Metadata: Activity overview, available streams, data points, units, format info\n' +
-        '2. Statistics: Summary stats for each stream type (max/min/avg where applicable)\n' +
-        '3. Data: Time-series data in compact arrays or verbose objects (based on format parameter)\n\n' +
-        
-        'Notes:\n' +
-        '- Requires activity:read scope\n' +
-        '- Not all streams are available for all activities\n' +
-        '- Older activities might have limited data\n' +
-        '- Large activities are automatically chunked to ~50KB per message\n' +
-        '- Use max_points parameter to downsample very large activities intelligently',
+    description: 'Returns time-series data streams (heart rate, power, GPS, pace, elevation) for an activity at configurable resolution, with pagination and intelligent downsampling for large datasets.',
     inputSchema,
-    execute: async ({ id, types = ['time', 'distance', 'heartrate', 'cadence', 'watts'], resolution: rawResolution, series_type, page = 1, points_per_page = 100, format = 'compact', max_points, summary_only = false }: GetActivityStreamsParams) => {
+    execute: async ({ activityId, types = ['time', 'distance', 'heartrate', 'cadence', 'watts'], resolution: rawResolution, series_type, page = 1, points_per_page = 100, format = 'compact', max_points, summary_only = false }: GetActivityStreamsParams) => {
         // Default resolution to 'low' for LLM-friendly payloads (issue #14).
         // This intentionally changes prior behavior where omitting resolution returned
         // the full native resolution (often 'high', ~10000 points), causing slow responses.
         // Callers who need more data should explicitly pass resolution: 'medium' or 'high'.
         const resolution = rawResolution ?? 'low';
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-        if (!token) {
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: 'text' as const, text: '❌ Missing STRAVA_ACCESS_TOKEN in .env' }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }
@@ -399,7 +368,7 @@ export const getActivityStreamsTool = {
             const queryString = new URLSearchParams(params).toString();
             
             // Build the endpoint URL with types in the path
-            const endpoint = `/activities/${id}/streams/${types.join(',')}${queryString ? '?' + queryString : ''}`;
+            const endpoint = `/activities/${activityId}/streams/${types.join(',')}${queryString ? '?' + queryString : ''}`;
             
             const response = await stravaApi.get<StreamSet>(endpoint);
             let streams = response.data;

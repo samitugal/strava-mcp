@@ -317,6 +317,8 @@ const RouteSchema = z.object({
     starred: z.boolean(),
     sub_type: z.number().int(), // 1 for "road", 2 for "mtb", 3 for "cx", 4 for "trail", 5 for "mixed"
     type: z.number().int(), // 1 for "ride", 2 for "run"
+    start_latlng: z.array(z.number()).nullable().optional(),
+    end_latlng: z.array(z.number()).nullable().optional(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     estimated_moving_time: z.number().int().optional().nullable(), // seconds
@@ -372,6 +374,38 @@ async function refreshAccessToken(): Promise<string> {
         console.error('Failed to refresh access token:', error);
         throw new Error(`Failed to refresh Strava access token: ${error instanceof Error ? error.message : String(error)}`);
     }
+}
+
+/**
+ * Returns a valid Strava access token, auto-refreshing if expired.
+ * Use this instead of reading process.env.STRAVA_ACCESS_TOKEN directly.
+ */
+export async function getValidToken(): Promise<string> {
+    const config = await loadConfig();
+
+    // Proactively refresh if token expires within 5 minutes
+    const now = Math.floor(Date.now() / 1000);
+    const bufferSec = 5 * 60;
+    if (config.accessToken && config.expiresAt && config.expiresAt < now + bufferSec && config.refreshToken) {
+        try {
+            return await refreshAccessToken();
+        } catch {
+            // Fall through to return existing token if refresh fails
+        }
+    }
+
+    if (config.accessToken) {
+        return config.accessToken;
+    }
+
+    // No token — try refresh token if available
+    if (config.refreshToken) {
+        return await refreshAccessToken();
+    }
+
+    throw new Error(
+        "Not connected to Strava. Use the 'connect-strava' tool to authenticate your account first."
+    );
 }
 
 /**

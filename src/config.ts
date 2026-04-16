@@ -60,16 +60,28 @@ export async function saveConfig(config: StravaConfig): Promise<void> {
 export async function loadConfig(): Promise<StravaConfig> {
     // Load from config file first
     const fileConfig = await loadConfigFile();
-    
-    // Environment variables take priority
+
+    // If the config file has a valid (non-expired) access token, prefer it over the
+    // environment variable. This ensures that tokens refreshed mid-session survive
+    // server restarts without requiring re-authentication.
+    const now = Math.floor(Date.now() / 1000);
+    const fileTokenIsValid = !!(
+        fileConfig.accessToken &&
+        fileConfig.expiresAt &&
+        fileConfig.expiresAt > now
+    );
+    const accessToken = fileTokenIsValid
+        ? fileConfig.accessToken
+        : (process.env.STRAVA_ACCESS_TOKEN || fileConfig.accessToken);
+
     const config: StravaConfig = {
         clientId: process.env.STRAVA_CLIENT_ID || fileConfig.clientId,
         clientSecret: process.env.STRAVA_CLIENT_SECRET || fileConfig.clientSecret,
-        accessToken: process.env.STRAVA_ACCESS_TOKEN || fileConfig.accessToken,
+        accessToken,
         refreshToken: process.env.STRAVA_REFRESH_TOKEN || fileConfig.refreshToken,
         expiresAt: fileConfig.expiresAt,
     };
-    
+
     return config;
 }
 

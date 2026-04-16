@@ -3,13 +3,14 @@ import { z } from "zod";
 import { formatLocalDateTime } from "../formatters.js";
 import {
     getActivityById as fetchActivityById,
-    StravaDetailedActivity // Type needed for formatter
+    StravaDetailedActivity, // Type needed for formatter
+    getValidToken
 } from "../stravaClient.js";
 // import { formatDuration } from "../server.js"; // Removed, now local
 
 // Zod schema for input validation
 const GetActivityDetailsInputSchema = z.object({
-    activityId: z.number().int().positive().describe("The unique identifier of the activity to fetch details for.")
+    activityId: z.coerce.number().int().positive().describe("The unique identifier of the activity to fetch details for.")
 });
 
 type GetActivityDetailsInput = z.infer<typeof GetActivityDetailsInputSchema>;
@@ -88,15 +89,15 @@ function formatActivityDetails(activity: StravaDetailedActivity): string {
 // Tool definition
 export const getActivityDetailsTool = {
     name: "get-activity-details",
-    description: "Fetches detailed information about a specific activity using its ID.",
+    description: "Returns detailed metrics for an activity — distance, time, elevation, pace, heart rate, cadence, power, and effort scores.",
     inputSchema: GetActivityDetailsInputSchema,
     execute: async ({ activityId }: GetActivityDetailsInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

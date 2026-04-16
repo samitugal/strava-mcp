@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getActivityPhotos as getActivityPhotosClient } from "../stravaClient.js";
+import { getActivityPhotos as getActivityPhotosClient, getValidToken } from "../stravaClient.js";
 
 const name = "get-activity-photos";
 
@@ -44,12 +44,12 @@ export const getActivityPhotosTool = {
     description,
     inputSchema,
     execute: async ({ id, size }: GetActivityPhotosInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

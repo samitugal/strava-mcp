@@ -1,9 +1,9 @@
 // import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"; // Removed
 import { z } from "zod";
-import { starSegment as updateStarStatus } from "../stravaClient.js"; // Renamed import
+import { starSegment as updateStarStatus, getValidToken } from "../stravaClient.js"; // Renamed import
 
 const StarSegmentInputSchema = z.object({
-    segmentId: z.number().int().positive().describe("The unique identifier of the segment to star or unstar."),
+    segmentId: z.coerce.number().int().positive().describe("The unique identifier of the segment to star or unstar."),
     starred: z.boolean().describe("Set to true to star the segment, false to unstar it."),
 });
 
@@ -15,13 +15,13 @@ export const starSegment = {
     description: "Stars or unstars a specific segment for the authenticated athlete.",
     inputSchema: StarSegmentInputSchema,
     execute: async ({ segmentId, starred }: StarSegmentInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token || token === 'YOUR_STRAVA_ACCESS_TOKEN_HERE') {
-            console.error("Missing or placeholder STRAVA_ACCESS_TOKEN in .env");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "❌ Configuration Error: STRAVA_ACCESS_TOKEN is missing or not set in the .env file." }],
-                isError: true,
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
+                isError: true
             };
         }
 

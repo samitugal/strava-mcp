@@ -1,11 +1,12 @@
 import { z } from "zod";
 import {
     getAthleteStats as fetchAthleteStats,
-    StravaStats
+    StravaStats,
+    getValidToken
 } from "../stravaClient.js";
 
 const GetAthleteStatsInputSchema = z.object({
-    athleteId: z.number().int().positive().describe("The unique identifier of the athlete to fetch stats for. Obtain this ID first by calling the get-athlete-profile tool.")
+    athleteId: z.coerce.number().int().positive().describe("The unique identifier of the athlete to fetch stats for.")
 });
 
 type GetAthleteStatsInput = z.infer<typeof GetAthleteStatsInputSchema>;
@@ -77,15 +78,15 @@ function formatStats(stats: StravaStats): string {
 
 export const getAthleteStatsTool = {
     name: "get-athlete-stats",
-    description: "Fetches the activity statistics (recent, YTD, all-time) for a specific athlete using their ID. Requires the athleteId obtained from the get-athlete-profile tool.",
+    description: "Returns recent, year-to-date, and all-time activity totals (distance, elevation, time) for rides, runs, and swims for a given athlete.",
     inputSchema: GetAthleteStatsInputSchema,
     execute: async ({ athleteId }: GetAthleteStatsInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-             console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
-             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
+            return {
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

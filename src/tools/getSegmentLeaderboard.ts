@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import {
     getSegmentLeaderboard as fetchSegmentLeaderboard,
-    StravaLeaderboardResponse
+    StravaLeaderboardResponse,
+    getValidToken
 } from '../stravaClient.js';
 
 export const inputSchema = z.object({
-    segmentId: z.number().int().positive().describe(
+    segmentId: z.coerce.number().int().positive().describe(
         'The unique identifier of the segment to fetch the leaderboard for.'
     ),
     gender: z.enum(['M', 'F']).optional().describe(
@@ -81,12 +82,12 @@ export const getSegmentLeaderboardTool = {
         '- Check if you have a chance at a top position',
     inputSchema,
     execute: async ({ segmentId, gender, age_group, weight_class, following = false, club_id, date_range, per_page = 10, page = 1 }: GetSegmentLeaderboardParams) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: 'text' as const, text: 'Configuration error: Missing Strava access token.' }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

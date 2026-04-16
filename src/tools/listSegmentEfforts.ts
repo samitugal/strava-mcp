@@ -4,14 +4,15 @@ import { formatLocalDate } from "../formatters.js";
 import {
     listSegmentEfforts as fetchSegmentEfforts,
     // handleApiError, // Removed unused import
-    StravaDetailedSegmentEffort // Type needed for formatter
+    StravaDetailedSegmentEffort, // Type needed for formatter
+    getValidToken
 } from "../stravaClient.js";
 // We need the formatter, but can't import the full tool. Let's copy it here for now.
 // TODO: Move formatters to a shared utils.ts file
 
 // Zod schema for input validation
 const ListSegmentEffortsInputSchema = z.object({
-    segmentId: z.number().int().positive().describe("The ID of the segment for which to list efforts."),
+    segmentId: z.coerce.number().int().positive().describe("The ID of the segment for which to list efforts."),
     startDateLocal: z.string().datetime({ message: "Invalid start date format. Use ISO 8601." }).optional().describe("Filter efforts starting after this ISO 8601 date-time (optional)."),
     endDateLocal: z.string().datetime({ message: "Invalid end date format. Use ISO 8601." }).optional().describe("Filter efforts ending before this ISO 8601 date-time (optional)."),
     perPage: z.number().int().positive().max(200).optional().default(30).describe("Number of efforts to return per page (default: 30, max: 200).")
@@ -55,15 +56,15 @@ function formatSegmentEffort(effort: StravaDetailedSegmentEffort): string {
 // Tool definition
 export const listSegmentEffortsTool = {
     name: "list-segment-efforts",
-    description: "Lists the authenticated athlete's efforts on a specific segment, optionally filtering by date.",
+    description: "Returns the authenticated athlete's efforts on a segment, including time, distance, and PR/KOM rank, with optional date range filtering.",
     inputSchema: ListSegmentEffortsInputSchema,
     execute: async ({ segmentId, startDateLocal, endDateLocal, perPage }: ListSegmentEffortsInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

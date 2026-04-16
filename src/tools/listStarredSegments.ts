@@ -1,5 +1,5 @@
 // import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"; // Removed
-import { getAuthenticatedAthlete, listStarredSegments as fetchSegments } from "../stravaClient.js"; // Renamed import
+import { getAuthenticatedAthlete, listStarredSegments as fetchSegments, getValidToken } from "../stravaClient.js"; // Renamed import
 
 // Export the tool definition directly
 export const listStarredSegments = {
@@ -8,13 +8,13 @@ export const listStarredSegments = {
     // No input schema needed
     inputSchema: undefined,
     execute: async () => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token || token === 'YOUR_STRAVA_ACCESS_TOKEN_HERE') {
-            console.error("Missing or placeholder STRAVA_ACCESS_TOKEN in .env");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "❌ Configuration Error: STRAVA_ACCESS_TOKEN is missing or not set in the .env file." }],
-                isError: true,
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
+                isError: true
             };
         }
 

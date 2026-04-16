@@ -1,11 +1,11 @@
 {
-  "name": "@r-huijts/strava-mcp-server",
-  "version": "1.2.1",
+  "name": "@samitugal/strava-mcp-server",
+  "version": "1.2.2",
   "description": "MCP server for Strava API",
   "mcpName": "io.github.r-huijts/strava-mcp",
   "repository": {
-    "type": "git", 
-    "url": "https://github.com/r-huijts/strava-mcp"
+    "type": "git",
+    "url": "https://github.com/samitugal/strava-mcp"
   },
   "main": "dist/server.js",
   "bin": {
@@ -37,7 +37,7 @@
     "llm",
     "ai"
   ],
-  "author": "",
+  "author": "Sami Tugal",
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",

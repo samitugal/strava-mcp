@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAthleteZones as fetchAthleteZones, StravaAthleteZones } from "../stravaClient.js";
+import { getAthleteZones as fetchAthleteZones, StravaAthleteZones, getValidToken } from "../stravaClient.js";
 import { formatDuration } from "../server.js"; // Shared helper
 
 const name = "get-athlete-zones";
@@ -61,12 +61,12 @@ export const getAthleteZonesTool = {
     description: description + "\n\nOutput includes both a formatted summary and the raw JSON data.",
     inputSchema,
     execute: async (_input: GetAthleteZonesInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

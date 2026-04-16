@@ -1,4 +1,4 @@
-import { getAuthenticatedAthlete } from "../stravaClient.js";
+import { getAuthenticatedAthlete, getValidToken } from "../stravaClient.js";
 
 // Export the tool definition directly
 export const getAthleteProfile = {
@@ -7,14 +7,14 @@ export const getAthleteProfile = {
     // No input schema needed for this tool
     inputSchema: undefined,
     execute: async () => { // No input parameters needed
-      const token = process.env.STRAVA_ACCESS_TOKEN;
-
-      if (!token || token === 'YOUR_STRAVA_ACCESS_TOKEN_HERE') {
-        console.error("Missing or placeholder STRAVA_ACCESS_TOKEN in .env");
-        return {
-          content: [{ type: "text" as const, text: "❌ Configuration Error: STRAVA_ACCESS_TOKEN is missing or not set in the .env file." }],
-          isError: true,
-        };
+      let token: string;
+      try {
+          token = await getValidToken();
+      } catch (error) {
+          return {
+              content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
+              isError: true
+          };
       }
 
       try {

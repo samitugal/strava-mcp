@@ -20,6 +20,7 @@ import { getSegmentEffortTool } from './tools/getSegmentEffort.js';
 import { listSegmentEffortsTool } from './tools/listSegmentEfforts.js';
 import { listAthleteRoutesTool } from './tools/listAthleteRoutes.js';
 import { getRouteTool } from './tools/getRoute.js';
+import { findNearbyRoutesTool } from './tools/findNearbyRoutes.js';
 import { exportRouteGpx } from './tools/exportRouteGpx.js';
 import { exportRouteTcx } from './tools/exportRouteTcx.js';
 import { getActivityStreamsTool } from './tools/getActivityStreams.js';
@@ -134,6 +135,12 @@ server.tool(
     getRouteTool.description,
     getRouteTool.inputSchema?.shape ?? {},
     getRouteTool.execute
+);
+server.tool(
+    findNearbyRoutesTool.name,
+    findNearbyRoutesTool.description,
+    findNearbyRoutesTool.inputSchema.shape,
+    findNearbyRoutesTool.execute
 );
 server.tool(
     exportRouteGpx.name,

@@ -3,12 +3,13 @@ import { z } from "zod";
 import {
     getSegmentById as fetchSegmentById,
     // handleApiError, // Removed unused import
-    StravaDetailedSegment // Type needed for formatter
+    StravaDetailedSegment, // Type needed for formatter
+    getValidToken
 } from "../stravaClient.js";
 
 // Input schema
 const GetSegmentInputSchema = z.object({
-    segmentId: z.number().int().positive().describe("The unique identifier of the segment to fetch.")
+    segmentId: z.coerce.number().int().positive().describe("The unique identifier of the segment to fetch.")
 });
 type GetSegmentInput = z.infer<typeof GetSegmentInputSchema>;
 
@@ -48,15 +49,15 @@ function formatSegmentDetails(segment: StravaDetailedSegment): string {
 // Tool definition
 export const getSegmentTool = {
     name: "get-segment",
-    description: "Fetches detailed information about a specific segment using its ID.",
+    description: "Returns detailed information about a segment — location, distance, grade, elevation, and effort/athlete counts.",
     inputSchema: GetSegmentInputSchema,
     execute: async ({ segmentId }: GetSegmentInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }

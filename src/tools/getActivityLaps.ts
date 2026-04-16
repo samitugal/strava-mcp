@@ -1,41 +1,13 @@
 import { z } from "zod";
-import { getActivityLaps as getActivityLapsClient } from "../stravaClient.js";
+import { getActivityLaps as getActivityLapsClient, getValidToken } from "../stravaClient.js";
 import { formatDuration } from "../server.js"; // Import helper
 
 const name = "get-activity-laps";
 
-const description = `
-Retrieves detailed lap data for a specific Strava activity.
-
-Use Cases:
-- Get complete lap data including timestamps, speeds, and metrics
-- Access raw values for detailed analysis or visualization
-- Extract specific lap metrics for comparison or tracking
-
-Parameters:
-- id (required): The unique identifier of the Strava activity.
-
-Output Format:
-Returns both a human-readable summary and complete JSON data for each lap, including:
-1. A text summary with formatted metrics
-2. Raw lap data containing all fields from the Strava API:
-   - Unique lap ID and indices
-   - Timestamps (start_date, start_date_local)
-   - Distance and timing metrics
-   - Speed metrics (average and max)
-   - Performance metrics (heart rate, cadence, power if available)
-   - Elevation data
-   - Resource state information
-   - Activity and athlete references
-
-Notes:
-- Requires activity:read scope for public/followers activities, activity:read_all for private activities
-- Returns complete data as received from Strava API without omissions
-- All numeric values are preserved in their original precision
-`;
+const description = "Returns per-lap metrics (time, distance, speed, heart rate, cadence, power) for a specific activity.";
 
 const inputSchema = z.object({
-    id: z.union([z.number(), z.string()]).describe("The identifier of the activity to fetch laps for."),
+    activityId: z.coerce.number().int().positive().describe("The unique identifier of the activity to fetch laps for."),
 });
 
 type GetActivityLapsInput = z.infer<typeof inputSchema>;
@@ -44,24 +16,24 @@ export const getActivityLapsTool = {
     name,
     description,
     inputSchema,
-    execute: async ({ id }: GetActivityLapsInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+    execute: async ({ activityId }: GetActivityLapsInput) => {
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }
 
         try {
-            console.error(`Fetching laps for activity ID: ${id}...`);
-            const laps = await getActivityLapsClient(token, id);
+            console.error(`Fetching laps for activity ID: ${activityId}...`);
+            const laps = await getActivityLapsClient(token, activityId);
 
             if (!laps || laps.length === 0) {
                 return {
-                    content: [{ type: "text" as const, text: `✅ No laps found for activity ID: ${id}` }]
+                    content: [{ type: "text" as const, text: `✅ No laps found for activity ID: ${activityId}` }]
                 };
             }
 
@@ -82,12 +54,12 @@ export const getActivityLapsTool = {
                 return details.filter(d => d !== null).join('\n');
             });
 
-            const summaryText = `Activity Laps Summary (ID: ${id}):\n\n${lapSummaries.join('\n\n')}`;
+            const summaryText = `Activity Laps Summary (ID: ${activityId}):\n\n${lapSummaries.join('\n\n')}`;
             
             // Add raw data section
             const rawDataText = `\n\nComplete Lap Data:\n${JSON.stringify(laps, null, 2)}`;
             
-            console.error(`Successfully fetched ${laps.length} laps for activity ${id}`);
+            console.error(`Successfully fetched ${laps.length} laps for activity ${activityId}`);
             
             return {
                 content: [
@@ -97,10 +69,10 @@ export const getActivityLapsTool = {
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error(`Error fetching laps for activity ${id}: ${errorMessage}`);
+            console.error(`Error fetching laps for activity ${activityId}: ${errorMessage}`);
             const userFriendlyMessage = errorMessage.includes("Record Not Found") || errorMessage.includes("404")
-                ? `Activity with ID ${id} not found.`
-                : `An unexpected error occurred while fetching laps for activity ${id}. Details: ${errorMessage}`;
+                ? `Activity with ID ${activityId} not found.`
+                : `An unexpected error occurred while fetching laps for activity ${activityId}. Details: ${errorMessage}`;
             return {
                 content: [{ type: "text" as const, text: `❌ ${userFriendlyMessage}` }],
                 isError: true

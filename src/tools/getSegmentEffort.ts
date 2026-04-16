@@ -4,11 +4,12 @@ import { formatLocalDateTime } from "../formatters.js";
 import {
     StravaDetailedSegmentEffort,
     getSegmentEffort as fetchSegmentEffort,
+    getValidToken,
 } from "../stravaClient.js";
 // import { formatDuration } from "../server.js"; // Removed, now local
 
 const GetSegmentEffortInputSchema = z.object({
-    effortId: z.number().int().positive().describe("The unique identifier of the segment effort to fetch.")
+    effortId: z.coerce.number().int().positive().describe("The unique identifier of the segment effort to fetch.")
 });
 
 type GetSegmentEffortInput = z.infer<typeof GetSegmentEffortInputSchema>;
@@ -64,15 +65,15 @@ function formatSegmentEffort(effort: StravaDetailedSegmentEffort): string {
 // Tool definition
 export const getSegmentEffortTool = {
     name: "get-segment-effort",
-    description: "Fetches detailed information about a specific segment effort using its ID.",
+    description: "Returns timing, power, and heart rate data for a specific segment effort.",
     inputSchema: GetSegmentEffortInputSchema,
     execute: async ({ effortId }: GetSegmentEffortInput) => {
-        const token = process.env.STRAVA_ACCESS_TOKEN;
-
-        if (!token) {
-            console.error("Missing STRAVA_ACCESS_TOKEN environment variable.");
+        let token: string;
+        try {
+            token = await getValidToken();
+        } catch (error) {
             return {
-                content: [{ type: "text" as const, text: "Configuration error: Missing Strava access token." }],
+                content: [{ type: "text" as const, text: `❌ ${error instanceof Error ? error.message : 'Authentication failed. Use the connect-strava tool to link your Strava account.'}` }],
                 isError: true
             };
         }
