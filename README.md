@@ -4,11 +4,44 @@
 
 Connect Claude to your Strava account and ask questions in plain English: "How far did I run this month?", "Analyze my last ride", or "Show me my fastest segments."
 
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/r-huijts-strava-mcp-badge.png)](https://mseep.ai/app/r-huijts-strava-mcp)
+> **This is a fork of [r-huijts/strava-mcp](https://github.com/r-huijts/strava-mcp).**
+> See [What's different in this fork](#whats-different-in-this-fork) for the full list of changes.
 
-<a href="https://glama.ai/mcp/servers/@r-huijts/strava-mcp">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@r-huijts/strava-mcp/badge" alt="Strava Server MCP server" />
-</a>
+---
+
+## What's Different in This Fork
+
+### 🔑 Auto-Authentication — No More "Connect my Strava"
+
+The original requires you to run `connect-strava` every time your token expires. This fork handles it automatically:
+
+- **Proactive refresh**: If your token expires within 5 minutes, it's refreshed before the API call.
+- **Reactive refresh**: Any `401` response triggers a silent token refresh and retries the request — you never see an auth error mid-session.
+- **Persistent tokens**: After a refresh, the new token is saved to `~/.config/strava-mcp/config.json`. On the next server restart, the saved (valid) token is preferred over the potentially-stale token in your env/config file. You stay logged in.
+
+Set your credentials once in `claude_desktop_config.json` with `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_ACCESS_TOKEN`, and `STRAVA_REFRESH_TOKEN` — the server handles the rest.
+
+### 🗺️ New Tool: `find-nearby-routes`
+
+Find your saved Strava routes that start near a location, sorted by distance:
+
+> "Show me my routes within 15 km of Istanbul"
+> "Find cycling routes near 48.8566, 2.3522"
+
+Parameters: `latitude`, `longitude`, `maxDistanceKm` (default: 10 km), optional `activityType` (ride/run).
+
+Uses the [Haversine formula](https://en.wikipedia.org/wiki/Haversine_formula) to calculate great-circle distances. Automatically paginates through all your saved routes.
+
+### 🐛 Bug Fixes
+
+- **`z.coerce.number()` for all ID parameters**: Claude serializes tool parameters as strings. The original used `z.number()` which rejected them with `Expected number, received string`. All ID params (`activityId`, `segmentId`, `effortId`, `athleteId`) now use `z.coerce.number()`.
+- **Consistent `activityId` naming**: `getActivityLaps` and `getActivityStreams` previously used `id` in their schemas, causing `Required, received undefined` errors when Claude passed `activityId`. Renamed to match.
+
+### 📝 Improved Tool Descriptions & Error Messages
+
+- All tool descriptions use active voice and describe what fields are returned, so Claude chooses the right tool more reliably.
+- Removed "Obtain this ID first by calling..." meta-hints that caused unnecessary chained calls.
+- All 26 tools return consistent, user-friendly error messages.
 
 ---
 
@@ -18,30 +51,30 @@ Once connected, just talk to Claude like you're talking to a friend who has acce
 
 ### 🏃 Track Your Progress
 > "How many kilometers did I run this month?"
-> 
+>
 > "Compare my running stats from January to December"
-> 
+>
 > "What's my longest ride ever?"
 
 ### 📊 Analyze Your Workouts
 > "Break down my last cycling workout - show me power, heart rate, and cadence"
-> 
+>
 > "How did my heart rate zones look during yesterday's run?"
-> 
+>
 > "What was my average pace for each lap in my interval training?"
 
 ### 🗺️ Explore Routes & Segments
+> "Find my saved routes within 20 km of my location"
+>
 > "What are the most popular cycling segments near Central Park?"
-> 
-> "Show me my starred segments"
-> 
+>
 > "Export my Sunday morning route as a GPX file"
 
 ### 🏆 Get Coaching Insights
 > "Analyze my training load this week"
-> 
+>
 > "How does my current fitness compare to last month?"
-> 
+>
 > "Give me a summary of my cycling performance this year"
 
 ---
@@ -61,59 +94,41 @@ Add this to the file:
   "mcpServers": {
     "strava": {
       "command": "npx",
-      "args": ["-y", "@r-huijts/strava-mcp-server"]
+      "args": ["-y", "@stugal/strava-mcp-server"],
+      "env": {
+        "STRAVA_CLIENT_ID": "your_client_id",
+        "STRAVA_CLIENT_SECRET": "your_client_secret",
+        "STRAVA_ACCESS_TOKEN": "your_access_token",
+        "STRAVA_REFRESH_TOKEN": "your_refresh_token"
+      }
     }
   }
 }
 ```
 
+Setting the env vars here means you never need to run `connect-strava` — tokens are refreshed automatically.
+
 ### Step 1 (alternative): Add to Claude Code
 
-You can add this MCP server to claude code with the following command:
-
 ```
-claude mcp add --transport stdio strava -- npx @r-huijts/strava-mcp-server
-```
-
-You can confirm successful instalation as follows:
-
-```
-% claude mcp list
-Checking MCP server health...
-
-strava: npx @r-huijts/strava-mcp-server - ✓ Connected
+claude mcp add --transport stdio strava -- npx @stugal/strava-mcp-server
 ```
 
 ### Step 2: Restart Claude Desktop
 
 Close and reopen Claude Desktop to load the new configuration.
 
-### Step 3: Connect Your Strava
+### Step 3: Start Talking
 
-Just say to Claude:
+That's it! Ask Claude about your Strava data directly. If you provided credentials in Step 1, you're already authenticated.
+
+If you didn't set env vars, say:
 
 > **"Connect my Strava account"**
-
-A browser window will open. Enter your Strava API credentials, authorize the app, and you're done!
-
-**That's it!** Start asking about your activities.
 
 ---
 
 ## Connecting Your Strava Account
-
-### First Time Setup
-
-When you say "Connect my Strava account", here's what happens:
-
-1. **A browser window opens** showing a setup page
-2. **Enter your Strava API credentials** (Client ID and Client Secret)
-3. **Click "Continue to Strava"** - you'll be redirected to Strava
-4. **Authorize the app** on Strava's website
-5. **See the success message** - you can close the browser
-6. **Done!** Claude confirms you're connected
-
-Your credentials are saved locally at `~/.config/strava-mcp/config.json` and persist across sessions.
 
 ### Getting Your Strava API Credentials
 
@@ -128,12 +143,22 @@ You need to create a free Strava API application (one-time setup):
    - **Authorization Callback Domain**: Must be `localhost`
 4. Copy your **Client ID** and **Client Secret**
 
-That's it! You only need to do this once.
+### Getting Your Access & Refresh Tokens
+
+Run the initial OAuth flow once to get your tokens:
+
+1. Add only `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` to your config
+2. Say "Connect my Strava account" — a browser window opens
+3. Authorize the app on Strava
+4. Your tokens are saved to `~/.config/strava-mcp/config.json`
+5. Copy them from there into your `claude_desktop_config.json` env block
+
+After this one-time setup, token refresh is fully automatic.
 
 ### Managing Your Connection
 
 - **Check status**: "Am I connected to Strava?"
-- **Reconnect**: "Connect my Strava account" (use `force: true` to reconnect)
+- **Force reconnect**: "Connect my Strava account"
 - **Disconnect**: "Disconnect my Strava account"
 
 ---
@@ -142,40 +167,22 @@ That's it! You only need to do this once.
 
 ### Option A: Just Use It (Recommended)
 
-No installation needed! The `npx` command in the Quick Start automatically downloads and runs the latest version.
+No installation needed! The `npx` command automatically downloads and runs the latest version.
 
 ### Option B: Install Globally
 
-If you prefer to install it once:
-
 ```bash
-npm install -g @r-huijts/strava-mcp-server
+npm install -g @stugal/strava-mcp-server
 ```
-
-Then update your Claude config to use:
-
-```json
-{
-  "mcpServers": {
-    "strava": {
-      "command": "strava-mcp-server"
-    }
-  }
-}
-```
-
-**Note:** Even though the package name is `@r-huijts/strava-mcp-server`, the executable name remains `strava-mcp-server` for backward compatibility.
 
 ### Option C: Build from Source
 
-For developers who want to modify the code:
-
-   ```bash
-   git clone https://github.com/r-huijts/strava-mcp.git
-   cd strava-mcp
-   npm install
-   npm run build
-   ```
+```bash
+git clone https://github.com/samitugal/strava-mcp.git
+cd strava-mcp
+npm install
+npm run build
+```
 
 Then point Claude to your local build:
 
@@ -189,56 +196,6 @@ Then point Claude to your local build:
   }
 }
 ```
-
----
-
-## Example Conversations
-
-### Morning Check-in
-
-> **You**: What did I do for exercise this week?
->
-> **Claude**: Looking at your Strava activities this week, you completed:
-> - Monday: 5.2km run (28:15)
-> - Wednesday: 45km bike ride (1:32:00)
-> - Saturday: 10km run (52:30)
-> 
-> Total: 60.2km across 3 activities. Nice consistency!
-
-### Workout Analysis
-
-> **You**: Analyze my last cycling workout in detail
->
-> **Claude**: Here's a breakdown of your ride "Evening Loop" from yesterday:
-> 
-> **Overview**
-> - Distance: 42.3 km
-> - Time: 1:28:45
-> - Avg Speed: 28.6 km/h
-> 
-> **Power Analysis**
-> - Average Power: 185W
-> - Normalized Power: 198W
-> - Max Power: 520W
-> 
-> **Heart Rate**
-> - Average: 142 bpm
-> - Max: 175 bpm
-> - Time in Zone 4+: 23 minutes
-> 
-> Your power-to-heart-rate ratio suggests good aerobic efficiency...
-
-### Finding New Routes
-
-> **You**: Find me some challenging cycling climbs near Boulder, Colorado
->
-> **Claude**: Here are popular climbing segments near Boulder:
-> 
-> 1. **Flagstaff Road** - 5.2km, 6.8% avg grade
-> 2. **Sunshine Canyon** - 3.8km, 7.2% avg grade  
-> 3. **Left Hand Canyon** - 8.1km, 4.5% avg grade
-> 
-> Want me to star any of these so you can find them easily later?
 
 ---
 
@@ -260,37 +217,38 @@ Then point Claude to your local build:
 |------------------|--------------|
 | "Show my recent activities" | Lists your latest workouts |
 | "Get all my runs from January" | Fetches activities with filters |
-| "Analyze activity 12345" | Detailed info about one activity |
-| "Show the laps from my last run" | Lap-by-lap breakdown |
-| "Get heart rate data from my ride" | Time-series workout data (optimized compact format) |
+| "Analyze activity 12345" | Distance, time, elevation, pace, HR, cadence, power |
+| "Show the laps from my last run" | Per-lap time, distance, speed, HR, cadence, power |
+| "Get heart rate data from my ride" | Time-series streams at configurable resolution |
 | "Show photos from my hike" | Activity photos |
 
 ### Stats & Progress
 
 | What you can ask | What it does |
 |------------------|--------------|
-| "What are my running stats?" | YTD and all-time totals |
+| "What are my running stats?" | Recent, YTD, and all-time totals |
 | "How far have I cycled this year?" | Activity totals by type |
-| "What's my longest ride?" | Personal records |
+
+### Routes *(includes new tool)*
+
+| What you can ask | What it does |
+|------------------|--------------|
+| "Find routes within 10 km of [location]" | **NEW** — nearby routes by lat/lng + max distance |
+| "List my saved routes" | Your created routes |
+| "Get details for my [route name]" | Route info |
+| "Export [route] as GPX" | Download for GPS devices |
+| "Export [route] as TCX" | Download for GPS devices |
 
 ### Segments
 
 | What you can ask | What it does |
 |------------------|--------------|
 | "Show my starred segments" | Your favorite segments |
-| "Find segments near [location]" | Discover popular segments |
-| "Get details on segment 12345" | Segment info and leaderboard |
+| "Find segments near [location]" | Popular segments in a bounding box |
+| "Get details on segment 12345" | Location, distance, grade, elevation, effort counts |
 | "Star this segment" | Save to favorites |
-| "Show my efforts on [segment]" | Your attempts on a segment |
-
-### Routes
-
-| What you can ask | What it does |
-|------------------|--------------|
-| "List my saved routes" | Your created routes |
-| "Get details for my [route name]" | Route info |
-| "Export [route] as GPX" | Download for GPS devices |
-| "Export [route] as TCX" | Download for GPS devices |
+| "Show my efforts on [segment]" | Your attempts with time, distance, PR/KOM rank |
+| "Show the leaderboard for segment 12345" | Top times with optional filters |
 
 ### Clubs
 
@@ -302,36 +260,29 @@ Then point Claude to your local build:
 
 ## Troubleshooting
 
-### "Connect my Strava account" doesn't open a browser
+### Token errors after restart
 
-- Make sure Claude Desktop is running the MCP server (check for errors in Claude)
-- Try restarting Claude Desktop
-- Check that port 8111 isn't blocked by a firewall
+This fork saves refreshed tokens to `~/.config/strava-mcp/config.json` and prefers them over env var tokens on restart. If you're still seeing auth errors, delete the config file and re-authenticate:
 
-### "Authentication failed" or "Invalid token"
+```bash
+rm ~/.config/strava-mcp/config.json
+```
 
-- Your token may have expired - say "Connect my Strava account" to reconnect
-- Make sure your Strava API application is still active at [strava.com/settings/api](https://www.strava.com/settings/api)
+Then say "Connect my Strava account".
 
-### "Missing credentials" error
+### First npx run is slow
 
-- You need to complete the OAuth flow - say "Connect my Strava account"
-- If you're using environment variables, make sure all 4 are set (see Developer section)
+`npx` downloads the package on first run (~30 seconds). Subsequent runs use the cache and start immediately.
 
 ### Claude doesn't see the Strava tools
 
 - Make sure your `claude_desktop_config.json` is valid JSON (no trailing commas!)
-- Restart Claude Desktop after making config changes
-- Check Claude's developer console for error messages
+- Restart Claude Desktop after config changes
+- Verify with: `npx -y @stugal/strava-mcp-server` — you should see the server start message
 
-### JSONRPC.ProtocolTransportError after package name change
+### "Scope not found" or similar npm errors
 
-If you're getting a JSONRPC error after updating to `@r-huijts/strava-mcp-server`:
-
-1. **Clear npx cache**: Run `rm -rf ~/.npm/_npx` in terminal
-2. **Verify config** uses `@r-huijts/strava-mcp-server` (not the old `strava-mcp-server`)
-3. **Restart Claude Desktop** completely (quit and reopen)
-4. **Test manually**: Run `npx -y @r-huijts/strava-mcp-server` - you should see "Starting Strava MCP Server v1.2.1..."
+Make sure you're using `@stugal/strava-mcp-server`, not the original `@r-huijts/strava-mcp-server`.
 
 ---
 
@@ -342,24 +293,26 @@ If you're getting a JSONRPC error after updating to `@r-huijts/strava-mcp-server
 
 ### Environment Variables
 
-Instead of using the browser-based auth, you can set environment variables:
-
 | Variable | Description |
 |----------|-------------|
 | `STRAVA_CLIENT_ID` | Your Strava Application Client ID |
 | `STRAVA_CLIENT_SECRET` | Your Strava Application Client Secret |
 | `STRAVA_ACCESS_TOKEN` | OAuth access token |
 | `STRAVA_REFRESH_TOKEN` | OAuth refresh token |
-| `ROUTE_EXPORT_PATH` | Directory for GPX/TCX exports |
 
-### Token Refresh
+### Token Refresh Flow
 
-The server automatically refreshes expired tokens. New tokens are saved to both `process.env` and `~/.config/strava-mcp/config.json`.
+1. `getValidToken()` is called at the start of every tool execution
+2. If `expiresAt` is known and within 5 minutes, token is proactively refreshed
+3. If no token exists but refresh token does, refresh is attempted automatically
+4. Any `401` response from the API triggers `handleApiError()` → silent refresh → retry
+5. Refreshed tokens are saved to both `process.env` and `~/.config/strava-mcp/config.json`
+6. On next server start, `loadConfig()` prefers the saved file token if it's still valid
 
 ### Config Priority
 
-1. Environment variables (highest)
-2. `~/.config/strava-mcp/config.json`
+1. `~/.config/strava-mcp/config.json` — if token is valid (not expired) ← **new behavior**
+2. Environment variables
 3. Local `.env` file
 
 ### Building & Testing
@@ -372,24 +325,28 @@ npm test
 
 ### Activity Streams Optimization
 
-The `get-activity-streams` tool uses a compact format by default, reducing payload size by ~70-80% while preserving all data:
+The `get-activity-streams` tool uses a compact format by default, reducing payload size by ~70-80%:
 
-- **Compact format** (default): Raw arrays with metadata, ~70-80% smaller, ideal for LLM processing
-- **Verbose format**: Human-readable objects with formatted values (backward compatible)
-- **Smart chunking**: Large activities automatically split into ~50KB chunks
-- **Optional downsampling**: Can reduce very large datasets while preserving key features
-
-The compact format includes comprehensive metadata (units, descriptions, statistics) so LLMs can understand the raw numeric data.
+- **Compact format** (default): Raw arrays with metadata, ideal for LLM processing
+- **Verbose format**: Human-readable objects with formatted values
+- **Smart chunking**: Large activities split into ~50KB chunks
+- **Intelligent downsampling**: Reduces large datasets while preserving peaks and valleys
 
 ### API Reference
 
-The server implements the Model Context Protocol (MCP) and exposes 25 tools for Strava API v3. See the source code in `src/tools/` for implementation details.
+The server implements the Model Context Protocol (MCP) and exposes **26 tools** for Strava API v3. See `src/tools/` for implementation details.
 
 ### Contributing
 
-Contributions welcome! Please submit a Pull Request.
+Contributions welcome! Please submit a Pull Request to [samitugal/strava-mcp](https://github.com/samitugal/strava-mcp).
 
 </details>
+
+---
+
+## Credits
+
+This project is a fork of [r-huijts/strava-mcp](https://github.com/r-huijts/strava-mcp) by Rick Huijts. The original project provides the solid MCP foundation and Strava API integration that this fork builds on.
 
 ---
 
@@ -399,4 +356,4 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Questions?** Open an issue on [GitHub](https://github.com/r-huijts/strava-mcp/issues).
+**Questions or issues?** Open an issue on [GitHub](https://github.com/samitugal/strava-mcp/issues).
