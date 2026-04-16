@@ -1,15 +1,15 @@
 {
-  "name": "@samitugal/strava-mcp-server",
+  "name": "@stugal/strava-mcp-server",
   "version": "1.2.2",
   "description": "MCP server for Strava API",
   "mcpName": "io.github.r-huijts/strava-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/samitugal/strava-mcp"
+    "url": "git+https://github.com/samitugal/strava-mcp.git"
   },
   "main": "dist/server.js",
   "bin": {
-    "strava-mcp-server": "./dist/server.js"
+    "strava-mcp-server": "dist/server.js"
   },
   "type": "module",
   "files": [
