@@ -57,9 +57,9 @@ const DetailedAthleteSchema = BaseAthleteSchema.extend({
     summit: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
-    profile_medium: z.string().url(),
-    profile: z.string().url(),
-    weight: z.number().nullable(),
+    profile_medium: z.string().url().nullable().optional(),
+    profile: z.string().url().nullable().optional(),
+    weight: z.number().nullable().optional(),
     measurement_preference: z.enum(["feet", "meters"]).optional().nullable(),
     bikes: z.array(z.object({
         id: z.string(),

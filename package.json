@@ -1,6 +1,6 @@
 {
   "name": "@stugal/strava-mcp-server",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "MCP server for Strava API",
   "mcpName": "io.github.r-huijts/strava-mcp",
   "repository": {
