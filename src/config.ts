@@ -42,43 +42,43 @@ async function loadConfigFile(): Promise<StravaConfig> {
  */
 export async function saveConfig(config: StravaConfig): Promise<void> {
     await ensureConfigDir();
-    
+
     // Merge with existing config
     const existing = await loadConfigFile();
     const merged = { ...existing, ...config };
-    
+
     await fs.writeFile(CONFIG_FILE, JSON.stringify(merged, null, 2), 'utf-8');
 }
 
 /**
  * Loads Strava configuration from multiple sources.
- * Priority (highest to lowest):
- * 1. Environment variables
- * 2. ~/.config/strava-mcp/config.json
- * 3. Local .env file (handled by dotenv in server.ts)
+ *
+ * Token priority (access/refresh tokens): config file > environment variables.
+ *   Rationale: Strava rotates refresh tokens on every refresh and tokens can be
+ *   refreshed mid-session. The file is updated on each refresh, while env vars
+ *   supplied by MCP clients (e.g. Claude Desktop) are static and become stale
+ *   after the first rotation. Env vars act only as a bootstrap fallback.
+ *
+ * Client credentials priority: environment variables > config file.
+ *   Rationale: these are long-lived and typically provisioned via env.
  */
 export async function loadConfig(): Promise<StravaConfig> {
     // Load from config file first
     const fileConfig = await loadConfigFile();
 
-    // If the config file has a valid (non-expired) access token, prefer it over the
-    // environment variable. This ensures that tokens refreshed mid-session survive
-    // server restarts without requiring re-authentication.
-    const now = Math.floor(Date.now() / 1000);
-    const fileTokenIsValid = !!(
-        fileConfig.accessToken &&
-        fileConfig.expiresAt &&
-        fileConfig.expiresAt > now
-    );
-    const accessToken = fileTokenIsValid
-        ? fileConfig.accessToken
-        : (process.env.STRAVA_ACCESS_TOKEN || fileConfig.accessToken);
+    // The config file is the source of truth for tokens once the user has
+    // connected. Strava rotates refresh tokens on every refresh, and tokens
+    // may be refreshed mid-session — so any value from the file is newer than
+    // the static env var supplied by the MCP client config. Env vars only
+    // act as a fallback for the initial bootstrap (before the file exists).
+    const accessToken = fileConfig.accessToken || process.env.STRAVA_ACCESS_TOKEN;
+    const refreshToken = fileConfig.refreshToken || process.env.STRAVA_REFRESH_TOKEN;
 
     const config: StravaConfig = {
         clientId: process.env.STRAVA_CLIENT_ID || fileConfig.clientId,
         clientSecret: process.env.STRAVA_CLIENT_SECRET || fileConfig.clientSecret,
         accessToken,
-        refreshToken: process.env.STRAVA_REFRESH_TOKEN || fileConfig.refreshToken,
+        refreshToken,
         expiresAt: fileConfig.expiresAt,
     };
 
@@ -92,7 +92,7 @@ export async function updateTokens(accessToken: string, refreshToken: string, ex
     // Update process.env for current session
     process.env.STRAVA_ACCESS_TOKEN = accessToken;
     process.env.STRAVA_REFRESH_TOKEN = refreshToken;
-    
+
     // Save to config file for persistence
     await saveConfig({
         accessToken,
